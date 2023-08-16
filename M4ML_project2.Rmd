@@ -1,0 +1,438 @@
+---
+output:
+  pdf_document: default
+  #html_document: default
+---
+subtitle: "Mathematics for machine learning"
+title: "Project 2"
+author: " Thomas Fardal Rødland, Eirik Wang"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  # html_document
+  pdf_document
+---
+
+
+```{r setup, include=FALSE, eval=TRUE, echo=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE,tidy=TRUE,message=FALSE,warning=FALSE,strip.white=TRUE,prompt=FALSE,
+                      cache=TRUE, size="scriptsize",fig.width=4, fig.height=3,fig.align = "center")
+```
+
+```{r}
+library(rlang)
+library(dplyr)
+library(psych)
+library(ggplot2) # PCA Visualization
+library(factoextra) # PCA Visualization
+library(caret) # Standardization
+library(ggvis) # Pairs
+library(DataExplorer)
+library(leaps)
+library(CAST)
+library(praznik)
+library(kknn)
+library(ROCR)
+library(randomForest)
+library(stats)
+library(klaR)
+library(psych)
+library(MASS)
+#library(ggord)
+library(devtools)
+library(qkerntool)
+library(plotROC)
+library(pROC)
+library(FactoMineR)
+```
+
+
+```{r}
+data <- read.csv("/Users/Thomas/Downloads/Acoustic Features.csv", sep = ",")
+output <- data[1]
+
+data[,"Class"] <- as.factor(data[, "Class"])
+
+set.seed(2022)
+indxTrain <- createDataPartition(y = data$Class,p = 0.75,list = FALSE)
+data.train <- data[indxTrain,]
+data.test <- data[-indxTrain,]
+
+```
+
+```{r}
+#checking for NA´s
+is.na(data)
+#qq plots
+plot_qq(data)
+```
+```{r}
+
+png(file="/Users/Thomas/Downloads/corr_plot_M4ML2.png")
+plot_correlation(data, maxcat = 5L)
+dev.off()
+```
+
+
+```{r}
+PCA_fmr <- PCA(data.train[, !colnames(data.train) %in% c("Class")],ncp=22,scale=TRUE)
+PCA_fmr$ind$coord
+train_pca <- as.data.frame(PCA_fmr$ind$coord)
+# Keep 100%
+pca_bind <- cbind(as.data.frame(PCA_fmr$ind$coord), data.train$Class)
+pca_bind
+```
+
+
+
+```{r}
+
+ #scale test set 
+scaled_test <- as.data.frame(scale(data.test[, !colnames(data.test) %in% c("Class")]))
+length(scaled_test)
+#transformed test data
+
+pca_test <- t(as.data.frame(t(as.data.frame(PCA_fmr$svd$V))%*%t(scaled_test)))
+
+
+pca_testbind <- cbind(as.data.frame(pca_test), as.data.frame(data.test$Class))
+colnames(pca_testbind) <- colnames(pca_bind)
+
+
+
+
+
+df.knn_pca <- kknn(data.train$Class~.,
+          train = train_pca, test = pca_testbind, k = 5, distance = 1)
+
+
+
+fit_knn_pca <- fitted(df.knn_pca)
+confusionMatrix(reference=data.test$Class,fit_knn_pca)
+```
+```{r}
+#performance metrics for pca and knn
+macro_recall_pca <- (0.76+0.68+0.60+0.36)/4
+
+macro_recall_pca
+
+macro_precision_pca <- (19/27 + 17/30 + 15/24 + 9/19)/4
+macro_precision_pca
+
+a_F1_pca <- 2/(1/0.76 + 1/(19/27))
+h_F1_pca <- 2/(1/0.68 + 1/(17/30))
+r_F1_pca <- 2/(1/0.60 + 1/(15/24))
+s_F1_pca <- 2/(1/0.36 + 1/(9/19))
+
+macro_F1_pca <- (a_F1_pca+h_F1_pca+r_F1_pca+s_F1_pca)/4
+
+
+```
+
+```{r}
+png(file="/Users/Thomas/Downloads/Scree_plot_M4ML2.png")
+fviz_eig(PCA, ncp = 50)
+dev.off()
+
+```
+```{r}
+get_eig(PCA)
+```
+
+
+```{r}
+MIM(data.train[,2:51],data.train$Class,k=15)
+```
+
+```{r}
+ffs.CMIM <- CMIM(data.train[,2:51],data.train$Class,k=15)
+ffs.CMIM
+```
+```{r}
+summary.CMIM <- summary(ffs.CMIM)
+summary.CMIM
+```
+```{r}
+ffs.CMIM25 <- CMIM(data.train[,2:51],data.train$Class,k=25)
+ffs.CMIM25
+```
+
+```{r}
+MRMR(data.train[,2:51],data.train$Class,k=15)
+```
+
+```{r}
+data.reduced <- data.train[,c("Class", "X_HarmonicChangeDetectionFunction_Std","X_Fluctuation_Mean","X_HarmonicChangeDetectionFunction_PeriodAmp","X_Eventdensity_Mean","X_Spectralcentroid_Mean","X_MFCC_Mean_3","X_Rolloff_Mean","X_MFCC_Mean_9","X_Zero.crossingrate_Mean","X_Pulseclarity_Mean","X_HarmonicChangeDetectionFunction_Mean","X_MFCC_Mean_1","X_EntropyofSpectrum_Mean","X_MFCC_Mean_2","X_AttackTime_Mean")]
+```
+```{r}
+data.reduced25 <- data.train[,c("Class", "X_HarmonicChangeDetectionFunction_Std","X_Fluctuation_Mean","X_HarmonicChangeDetectionFunction_PeriodAmp","X_Eventdensity_Mean","X_Spectralcentroid_Mean","X_MFCC_Mean_3","X_Rolloff_Mean","X_MFCC_Mean_9","X_Zero.crossingrate_Mean","X_Pulseclarity_Mean","X_HarmonicChangeDetectionFunction_Mean","X_MFCC_Mean_1","X_EntropyofSpectrum_Mean","X_MFCC_Mean_2","X_AttackTime_Mean","X_MFCC_Mean_4","X_Roughness_Slope","X_MFCC_Mean_10","X_MFCC_Mean_7","X_Spectralspread_Mean","X_Chromagram_Mean_1","X_Brightness_Mean","X_Chromagram_Mean_7","X_Roughness_Mean","X_RMSenergy_Mean")]
+```
+```{r}
+
+```
+
+```{r}
+#knn with 15
+
+knn_fit <- train(Class~., method="knn",
+            metric ="Accuracy", data = data.reduced)
+
+
+best.k<-knn_fit$bestTune$k #automatic decison
+
+df.knn15 <- kknn(formula = formula(Class~.),
+          train = data.reduced, test = data.test, k = 5, distance = 1)
+
+fit_knn15 <- fitted(df.knn15)
+confusionMatrix(reference=data.test$Class,fit_knn15)
+```
+
+
+
+```{r}
+#recall15
+
+ar <- 0.8400
+
+hr <- 0.8400
+
+rr <- 0.6000
+
+sr <- 0.5600
+
+
+```
+
+```{r}
+macro_recall <- (ar+hr+rr+sr)/4
+macro_recall
+```
+
+```{r}
+macro_precision <- (21/27 + 21/25 + 15/24 + 14/24 )/4
+macro_precision
+```
+
+```{r}
+aF1 <- 2/((1/ar+1/(21/27)))
+hF1 <- 2/((1/hr+1/(21/25)))
+rF1 <- 2/((1/rr+1/(15/24)))
+sF1 <- 2/((1/sr+1/(14/24)))
+```
+
+```{r}
+macro_F1 <- (aF1 + hF1 + rF1 + sF1)/4
+macro_F1
+```
+
+```{r}
+#knn with 25
+
+best.k<-knn_fit$bestTune$k #automatic decison
+
+df.knn25 <- kknn(formula = formula(Class~.),
+          train = data.reduced25, test = data.test, k = 5, distance = 1)
+
+fit25 <- fitted(df.knn25)
+confusionMatrix(reference=data.test$Class,fit25)
+
+```
+```{r}
+ar25 <- 0.7600
+
+hr25 <- 0.9200
+
+rr25 <- 0.5200
+
+sr25 <- 0.6000
+
+macro_recall <- (ar25+hr25+rr25+sr25)/4
+macro_recall
+```
+
+```{r}
+macro_precision <- (22/29 + 24/32 + 12/18 + 12/21 )/4
+macro_precision
+```
+```{r}
+aF125 <- 2/((1/ar25 + 1/(22/29)))
+hF125 <- 2/((1/hr25 + 1/(24/32)))
+rF125 <- 2/((1/rr25 + 1/(12/18)))
+sF125 <- 2/((1/sr25 + 1/(12/21)))
+
+macro_F1 <- (aF125 + hF125 + rF125 + sF125)/4
+macro_F1
+```
+
+Now we use the second classifier with the same reduced data set(forward feature selection)
+
+```{r}
+rf.ffs <- randomForest(Class~.,data = data.reduced, proximity = TRUE )
+rf.ffs25 <- randomForest(Class~.,data=data.reduced25,proximity = TRUE)
+```
+```{r}
+
+rf.pred <- predict(rf.ffs, newdata=data.test,type = "class")
+ 
+conf_rf <- confusionMatrix(rf.pred,data.test$Class)
+conf_rf  
+
+```
+```{r}
+macro_precision_rf15 <- (20/20 + 24/27 + 17/23 + 18/30 )/4
+macro_precision_rf15
+```
+```{r}
+F1_rf15_a <- 2/((1/0.8000 + 1/(20/20)))
+F1_rf15_h <- 2/((1/0.9200 + 1/(24/27)))
+F1_rf15_r <- 2/((1/0.6800 + 1/(17/23)))
+F1_rf15_s <- 2/((1/0.7600 + 1/(18/30)))
+
+macro_F1 <- (F1_rf15_a+F1_rf15_h+F1_rf15_r+F1_rf15_s)/4
+macro_F1
+```
+
+```{r}
+
+rf25.pred <- predict(rf.ffs25, newdata=data.test,type = "class")
+
+conf_rf25 <- confusionMatrix(rf25.pred,data.test$Class)
+conf_rf25 
+```
+```{r}
+macro_precision_rf25 <- (20/20 + 23/28 + 18/22 + 19/30 )/4
+macro_precision_rf25
+```
+
+```{r}
+F1_rf25_a <- 2/((1/0.8000 + 1/(20/20)))
+F1_rf25_h <- 2/((1/0.9200 + 1/(23/28)))
+F1_rf25_r <- 2/((1/0.7200 + 1/(18/22)))
+F1_rf25_s <- 2/((1/0.6000 + 1/(19/30)))
+
+macro_F1 <- (F1_rf25_a+F1_rf25_h+F1_rf25_r+F1_rf25_s)/4
+macro_F1
+```
+
+```{r}
+rf.pca <- randomForest(data.train$Class~.,data=train_pca,proximity = TRUE)
+```
+
+```{r}
+rf_pca.pred <- predict(rf.pca, newdata=pca_testbind,type = "class")
+ 
+conf_rf <- confusionMatrix(rf_pca.pred,data.test$Class)
+conf_rf
+```
+```{r}
+macro_recall_rf_pca <- (0.72 + 0.84 + 0.76 + 0.52)/4
+macro_recall_rf_pca
+```
+
+```{r}
+macro_precision_rf_pca <- (18/23 + 21/27 + 19/28 + 13/22)/4
+macro_precision_rf_pca
+```
+
+
+```{r}
+F1_rf_pca_a <- 2/((1/0.72 + 1/(18/23)))
+F1_rf_pca_h <- 2/((1/0.84 + 1/(21/27)))
+F1_rf_pca_r <- 2/((1/0.76 + 1/(19/28)))
+F1_rf_pca_s <- 2/((1/0.52 + 1/(13/22)))
+macro_F1_rf_pca <- (F1_rf_pca_a + F1_rf_pca_h + F1_rf_pca_r + F1_rf_pca_s)/4
+macro_F1_rf_pca
+```
+
+```{r}
+
+turkish.backward <- regsubsets(Class~.,data=data.train, method= "backward", nvmax = 50)
+summary.backward <- summary(turkish.backward)
+
+png(file="/Users/Thomas/Downloads/Bacward_featureM4ML.png")
+plot(summary.backward$adjr2, xlab = "Number of predictors", ylab = "$R2_adj",main = "Backward",type ="b")
+dev.off()
+
+```
+
+```{r}
+
+data.frame(
+  Adj.R2 = which.max(summary.backward$adjr2),
+  CP = which.min(summary.backward$cp),
+  BIC = which.min(summary.backward$bic)
+)
+```
+```{r}
+names(summary.backward)
+coef(turkish.backward,25)
+```
+
+```{r}
+data.backward25 <- data.train[,c("Class","X_Lowenergy_Mean","X_MFCC_Mean_2","X_MFCC_Mean_5","X_MFCC_Mean_7","X_MFCC_Mean_10","X_Zero.crossingrate_Mean","X_AttackTime_Slope","X_Pulseclarity_Mean","X_Spectralcentroid_Mean","X_Spectralflatness_Mean","X_Chromagram_Mean_8","X_HarmonicChangeDetectionFunction_Std","X_RMSenergy_Mean","X_MFCC_Mean_1","X_MFCC_Mean_3","X_MFCC_Mean_6","X_MFCC_Mean_9","X_Roughness_Mean","X_AttackTime_Mean","X_Eventdensity_Mean","X_Brightness_Mean","X_Spectralskewness_Mean","X_Chromagram_Mean_3","X_HarmonicChangeDetectionFunction_Mean","X_HarmonicChangeDetectionFunction_PeriodAmp")]
+```
+```{r}
+#Now we do knn with the backward selection data set
+
+
+
+df_backwards.knn <- kknn(formula = formula(Class~.),
+          train = data.backward25, test = data.test, k = 5, distance = 1)
+
+fit_backwards <- fitted(df_backwards.knn)
+confusionMatrix(reference=data.test$Class,fit_backwards)
+
+```
+
+
+
+```{r}
+macro_recall_knn_bc <- (0.88 + 0.88 + 0.68 + 0.40)/4
+macro_recall_knn_bc
+```
+
+```{r}
+macro_precision__knn_bc <- (22/31 + 22/28 + 17/24 + 10/17)/4
+macro_precision__knn_bc
+```
+
+
+```{r}
+F1_knn_bc_a <- 2/((1/0.88 + 1/(22/31)))
+F1_knn_bc_h <- 2/((1/0.88 + 1/(22/28)))
+F1_knn_bc_r <- 2/((1/0.68 + 1/(17/24)))
+F1_knn_bc_s<- 2/((1/0.40 + 1/(10/17)))
+macro_F1_knn_bc <- (F1_knn_bc_a + F1_knn_bc_h + F1_knn_bc_r + F1_knn_bc_s)/4
+macro_F1_knn_bc
+```
+
+```{r}
+rf.bc <- randomForest(data.train$Class~.,data=data.backward25,proximity = TRUE)
+```
+
+```{r}
+rf_bc.pred <- predict(rf.bc, newdata=data.test,type = "class")
+ 
+conf_rf_bc <- confusionMatrix(rf_bc.pred,data.test$Class)
+conf_rf_bc
+```
+
+```{r}
+macro_recall_rf_bc <- (0.88 + 0.96 + 0.72 + 0.64)/4
+macro_recall_rf_bc
+```
+
+```{r}
+macro_precision_rf_bc <- (22/24 + 24/28 + 18/23 + 16/25)/4
+macro_precision_rf_bc
+```
+
+
+```{r}
+F1_rf_bc_a <- 2/((1/0.88 + 1/(22/24)))
+F1_rf_bc_h <- 2/((1/0.96 + 1/(24/28)))
+F1_rf_bc_r <- 2/((1/0.72 + 1/(18/23)))
+F1_rf_bc_s <- 2/((1/0.64 + 1/(16/25)))
+macro_F1_rf_bc <- (F1_rf_bc_a + F1_rf_bc_h + F1_rf_bc_r + F1_rf_bc_s)/4
+macro_F1_rf_bc
+```
